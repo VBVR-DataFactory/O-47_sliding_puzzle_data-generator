@@ -233,19 +233,9 @@ class TaskGenerator(BaseGenerator):
                 initial_state, goal_state, size, solution_length, states=states
             )
 
-        metadata: Dict[str, Any] = {
-            "task_id": task_id,
-            "domain": self.config.domain,
-            "puzzle_size": size,
-            "generation_method": method,
-            "min_moves": min_m,
-            "max_moves": max_m,
-            "num_moves": solution_length,
-            "initial_state": initial_state,
-            "goal_state": goal_state,
-            "solution_blank_moves": solution_blank_moves,
-            "steps": step_records,
-        }
+        # Metadata is set to None to ensure only required files are generated:
+        # first_frame.png, final_frame.png, prompt.txt, and ground_truth.mp4
+        metadata = None
 
         return TaskPair(
             task_id=task_id,
