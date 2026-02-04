@@ -496,6 +496,25 @@ class TaskGenerator(BaseGenerator):
     #  RENDERING METHODS
     # ══════════════════════════════════════════════════════════════════════════
     
+    def _create_fixed_figure(self, puzzle_size: int, tile_color: str):
+        """
+        Create a figure with fixed layout parameters (no bbox_inches='tight').
+        This is faster for animation frames.
+        """
+        fig, ax = plt.subplots(figsize=(8, 8), dpi=100)
+        ax.set_xlim(0, puzzle_size)
+        ax.set_ylim(0, puzzle_size)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
+        
+        # Use fixed tight layout without bbox_inches='tight'
+        # This is much faster and ensures consistent dimensions
+        plt.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
+        
+        return fig, ax
+    
     def render_puzzle(self, puzzle: List[List[int]], size: int, tile_color: str = '#4A90E2') -> Image.Image:
         """
         Render the puzzle as a PIL Image.
@@ -510,14 +529,8 @@ class TaskGenerator(BaseGenerator):
         """
         canvas_size = self.config.image_size[0]
         
-        # Create figure with white background
-        fig, ax = plt.subplots(figsize=(8, 8), dpi=100)
-        ax.set_xlim(0, size)
-        ax.set_ylim(0, size)
-        ax.set_aspect('equal')
-        ax.axis('off')
-        fig.patch.set_facecolor('white')
-        ax.set_facecolor('white')
+        # Create figure with fixed layout
+        fig, ax = self._create_fixed_figure(size, tile_color)
         
         # Draw grid lines (底层)
         for i in range(size + 1):
@@ -561,14 +574,12 @@ class TaskGenerator(BaseGenerator):
                            ha='center', va='center', fontsize=fontsize, 
                            color='white', weight='bold', zorder=4)
         
-        # Save to temporary buffer and convert to PIL Image
-        import io
-        buf = io.BytesIO()
-        plt.tight_layout()
-        fig.savefig(buf, dpi=100, bbox_inches='tight', facecolor='white', format='png')
+        # Use canvas.draw() for faster rendering with fixed layout
+        fig.canvas.draw()
+        img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        img = Image.fromarray(img_array, 'RGB')
         plt.close(fig)
-        buf.seek(0)
-        img = Image.open(buf).convert('RGB')
         
         # Resize to desired canvas size
         if img.size[0] != canvas_size:
@@ -701,14 +712,8 @@ class TaskGenerator(BaseGenerator):
             # Use smooth easing
             t = t * t * (3.0 - 2.0 * t)  # smoothstep
             
-            # Create the frame using matplotlib
-            fig, ax = plt.subplots(figsize=(8, 8), dpi=100)
-            ax.set_xlim(0, puzzle_size)
-            ax.set_ylim(0, puzzle_size)
-            ax.set_aspect('equal')
-            ax.axis('off')
-            fig.patch.set_facecolor('white')
-            ax.set_facecolor('white')
+            # Create the frame using fixed layout (fast rendering)
+            fig, ax = self._create_fixed_figure(puzzle_size, tile_color)
             
             # Draw grid lines (底层)
             for i in range(puzzle_size + 1):
@@ -766,14 +771,13 @@ class TaskGenerator(BaseGenerator):
                    ha='center', va='center', fontsize=fontsize,
                    color='white', weight='bold', zorder=6)
             
-            # Convert to PIL Image using savefig to BytesIO
-            # This is slower than canvas.draw() but ensures consistency
-            buf = io.BytesIO()
-            plt.tight_layout()
-            fig.savefig(buf, dpi=100, bbox_inches='tight', facecolor='white', format='png')
+            # Convert to PIL Image using canvas.draw() with fixed layout
+            # This is much faster than savefig and maintains consistency
+            fig.canvas.draw()
+            img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            img = Image.fromarray(img_array, 'RGB')
             plt.close(fig)
-            buf.seek(0)
-            img = Image.open(buf).convert('RGB')
             
             # Resize to desired canvas size
             if img.size[0] != canvas_size:
