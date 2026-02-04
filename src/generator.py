@@ -9,6 +9,7 @@
 
 import random
 import tempfile
+import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from PIL import Image
@@ -616,8 +617,8 @@ class TaskGenerator(BaseGenerator):
         goal_state: List[List[int]],
         puzzle_size: int,
         states: Optional[List[List[List[int]]]] = None,
-        hold_frames: int = 8,
-        transition_frames_per_step: int = 15,
+        hold_frames: int = 5,
+        transition_frames_per_step: int = 10,
         tile_color: str = '#4A90E2'
     ) -> List[Image.Image]:
         """
@@ -765,8 +766,8 @@ class TaskGenerator(BaseGenerator):
                    ha='center', va='center', fontsize=fontsize,
                    color='white', weight='bold', zorder=6)
             
-            # Convert to PIL Image using the same method as render_puzzle
-            import io
+            # Convert to PIL Image using savefig to BytesIO
+            # This is slower than canvas.draw() but ensures consistency
             buf = io.BytesIO()
             plt.tight_layout()
             fig.savefig(buf, dpi=100, bbox_inches='tight', facecolor='white', format='png')
