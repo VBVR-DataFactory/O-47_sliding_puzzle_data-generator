@@ -77,12 +77,39 @@ class TaskConfig(GenerationConfig):
         description="Generation method: 'reverse' (from goal state) or 'random' (random valid state)"
     )
     
+    tile_color_theme: str = Field(
+        default="random",
+        description="""Tile color theme for the puzzle.
+        Options: 'random' (randomly select from available colors), 
+        or specify: 'blue', 'green', 'red', 'purple', 'orange', 'cyan', 
+        'pink', 'gold', 'lime', 'magenta'"""
+    )
+    
     difficulty_distribution: Optional[dict] = Field(
-        default=None,
-        description="""Optional difficulty distribution dict for mixed configurations.
-        Example: {
-            "easy": {"size": 3, "min_moves": 3, "max_moves": 5, "weight": 0.3},
-            "medium": {"size": 4, "min_moves": 5, "max_moves": 8, "weight": 0.4},
-            "hard": {"size": 5, "min_moves": 8, "max_moves": 12, "weight": 0.3}
-        }"""
+        default={
+            'size_3': {
+                'size': 3,
+                'min_moves': 3,
+                'max_moves': 10,
+                'weight': 0.3,
+                'generation_method': 'random'
+            },
+            'size_4': {
+                'size': 4,
+                'min_moves': 5,
+                'max_moves': 12,
+                'weight': 0.4,
+                'generation_method': 'random'
+            },
+            'size_5': {
+                'size': 5,
+                'min_moves': 8,
+                'max_moves': 15,
+                'weight': 0.3,
+                'generation_method': 'random'
+            }
+        },
+        description="""Difficulty distribution dict for mixed configurations.
+        Set to None to use single puzzle_size configuration.
+        Default uses mixed 3×3, 4×4, 5×5 puzzles for better scaling."""
     )
