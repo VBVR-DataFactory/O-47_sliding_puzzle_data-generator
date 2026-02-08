@@ -32,7 +32,7 @@ class TaskConfig(GenerationConfig):
     # ══════════════════════════════════════════════════════════════════════════
     
     domain: str = Field(default="sliding_puzzle")
-    image_size: tuple[int, int] = Field(default=(400, 400))
+    image_size: tuple[int, int] = Field(default=(1024, 1024))
     
     # ══════════════════════════════════════════════════════════════════════════
     #  VIDEO SETTINGS
@@ -44,7 +44,7 @@ class TaskConfig(GenerationConfig):
     )
     
     video_fps: int = Field(
-        default=10,
+        default=16,
         description="Video frame rate"
     )
     
