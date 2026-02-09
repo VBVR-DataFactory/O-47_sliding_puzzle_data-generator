@@ -1,211 +1,143 @@
-# Sliding Puzzle Task Data Generator
+# O-47: Sliding Puzzle Data Generator
 
-A data generator for creating sliding puzzle reasoning tasks for video model evaluation. This task is based on [VMEvalKit](https://github.com/Video-Reason/VMEvalKit.git) and follows the format standard of [template-data-generator](https://github.com/vm-dataset/template-data-generator.git).
+Generates synthetic sliding tile puzzle tasks where numbered tiles must be rearranged into sequential order by sliding them into the blank space. Tests spatial reasoning, sequential planning, and multi-step problem solving.
 
-Generates near-complete sliding puzzles (1-2 moves from solution) that test spatial reasoning, simple planning, and visual consistency in video generation models.
+Each sample pairs a **task** (first frame + prompt describing what needs to happen) with its **ground truth solution** (final frame showing the result + video demonstrating how to achieve it). This structure enables both model evaluation and training.
 
-Repository: [O_47_sliding_puzzle_data_generator](https://github.com/vm-dataset/O_47_sliding_puzzle_data_generator)
+---
 
-## Quick Start
+## 📌 Basic Information
+
+| Property | Value |
+|----------|-------|
+| **Task ID** | O-47 |
+| **Task** | Sliding Puzzle |
+| **Category** | Puzzle Solving/Sequential Planning |
+| **Resolution** | 1024×1024 px |
+| **FPS** | 16 fps |
+| **Duration** | varies |
+| **Output** | PNG images + MP4 video |
+
+---
+
+## 🚀 Usage
+
+### Installation
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/vm-dataset/O_47_sliding_puzzle_data_generator.git
-cd O_47_sliding_puzzle_data_generator
+# Clone the repository
+git clone https://github.com/VBVR-DataFactory/O-47_sliding_puzzle_data-generator.git
+cd O-47_sliding_puzzle_data-generator
 
-# 2. Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install --upgrade pip
+# Install dependencies
 pip install -r requirements.txt
-pip install -e .
-
-# 4. Generate sliding puzzle tasks
-python3 examples/generate.py --num-samples 50
-
-# Generate with custom puzzle size and moves
-python3 examples/generate.py --num-samples 50 --output data/my_puzzles
 ```
 
-## Project Structure
+### Generate Data
 
-```
-sliding-puzzle-task-data-generator/
-├── core/                    # Standard utilities (template framework)
-│   ├── base_generator.py   # Abstract base class
-│   ├── schemas.py          # Pydantic models
-│   ├── image_utils.py      # Image helpers
-│   ├── video_utils.py      # Video generation
-│   └── output_writer.py    # File output
-├── src/                     # Task-specific implementation
-│   ├── generator.py        # Sliding puzzle generator
-│   ├── prompts.py          # Sliding puzzle prompts
-│   └── config.py           # Sliding puzzle configuration
-├── examples/                # Example generation scripts
-│   ├── generate.py         # Basic entry point
-│   └── generate_large_dataset.py  # Large-scale generation
-└── data/questions/         # Generated output directory
-```
-
-## Output Format
-
-Every generator produces tasks in the following structure:
-
-```
-data/questions/{domain}_task/{task_id}/
-├── first_frame.png          # Initial state (REQUIRED)
-├── final_frame.png          # Goal state (REQUIRED)
-├── prompt.txt               # Task instructions (REQUIRED)
-├── ground_truth.mp4         # Solution video (OPTIONAL)
-└── question_metadata.json   # Task metadata (OPTIONAL)
-```
-
-## Task Description
-
-This generator creates sliding puzzles with scalable state space (3-20 moves) for video model evaluation. Supports both reverse generation (from goal state) and random state generation for maximum diversity.
-
-**Key Features:**
-- Spatial Reasoning: Understanding 2D grid space and tile positions
-- Planning: Identifying which tiles need to move (3-20 moves)
-- Visual Consistency: Maintaining tile appearance during sliding animation
-- Scalable: Generate hundreds or thousands of unique tasks
-
-### Configuration Options
-
-In `src/config.py`, you can customize:
-- `puzzle_size`: 3, 4, or 5 (for 3×3, 4×4, or 5×5 puzzles)
-- `min_moves`: Minimum number of moves (default: 3, for larger state space)
-- `max_moves`: Maximum number of moves (default: 10, can go up to 20)
-- `generation_method`: `"reverse"` (from goal state) or `"random"` (random valid states)
-- `difficulty_distribution`: Optional dict for mixed configurations
-- `image_size`: Canvas size in pixels (default: 400×400)
-- `generate_videos`: Whether to generate ground truth videos
-
-### Example Usage
-
-**For small to medium datasets (<500 tasks):**
 ```bash
-# Generate 100 puzzles with random states
-python3 examples/generate.py --num-samples 100
+# Generate 100 samples
+python examples/generate.py --num-samples 100
 
-# Generate without videos (faster)
-python3 examples/generate.py --num-samples 500 --no-videos
+# Generate with specific seed
+python examples/generate.py --num-samples 100 --seed 42
+
+# Generate without videos
+python examples/generate.py --num-samples 100 --no-videos
+
+# Custom output directory
+python examples/generate.py --num-samples 100 --output data/my_output
 ```
 
-**For large-scale datasets (1000+ tasks):**
-```bash
-# Generate 1000 tasks with mixed difficulty (recommended)
-python3 examples/generate_large_dataset.py --num-samples 1000 --mixed --no-videos
+### Command-Line Options
 
-# Generate 5000 tasks, single size
-python3 examples/generate_large_dataset.py --num-samples 5000 --size 4 --no-videos
+| Argument | Type | Description | Default |
+|----------|------|-------------|---------|
+| `--num-samples` | int | Number of samples to generate | 100 |
+| `--seed` | int | Random seed for reproducibility | Random |
+| `--output` | str | Output directory | data |
+| `--no-videos` | flag | Skip video generation | False |
 
-# Generate 10000 tasks with custom configuration
-python3 examples/generate_large_dataset.py --num-samples 10000 --mixed --no-videos --output data/large_dataset
+---
+
+## 📖 Task Example
+
+### Prompt
+
+```
+Complete this sliding puzzle. The goal is to arrange the numbered tiles in sequential order (filling each row from left to right, with rows from top to bottom), with the blank space at the bottom-right corner.
+
+Rules: Only tiles adjacent to the blank space can be moved. Slide one tile per move into the blank space.
+
+Complete in exactly 5 moves.
+
+Do not make extra moves. Keep the camera view fixed and maintain the grid structure unchanged.
 ```
 
-## Task Details
+### Visual
 
-### Puzzle Generation Methods
+<table>
+<tr>
+  <td align="center"><img src="samples/O-47_first_0.png" width="300"/></td>
+  <td align="center"><img src="samples/O-47_video_0.gif" width="300"/></td>
+  <td align="center"><img src="samples/O-47_final_0.png" width="300"/></td>
+</tr>
+<tr>
+  <td align="center"><b>Initial Frame</b><br/>Tiles in scrambled configuration</td>
+  <td align="center"><b>Animation</b><br/>Tiles sliding to solve puzzle</td>
+  <td align="center"><b>Final Frame</b><br/>Tiles in sequential order</td>
+</tr>
+</table>
 
-The generator supports two methods for creating puzzles:
+---
 
-1. **Reverse Generation** (`generation_method="reverse"`):
-   - Starts from the goal state (numbers in order, empty space at bottom-right)
-   - Makes N random reverse moves (N = min_moves to max_moves)
-   - Avoids immediate backtracking to ensure diversity
-   - Good for controlled difficulty levels
+## 📖 Task Description
 
-2. **Random Generation** (`generation_method="random"`):
-   - Creates random valid puzzle states by extensive randomization
-   - Makes 3×max_moves random moves from goal state
-   - Provides much larger state space
-   - **Recommended for generating many unique tasks**
+### Objective
 
-### Uniqueness Guarantee
+Rearrange numbered tiles from a scrambled configuration into sequential order (1, 2, 3, ...) by sliding tiles into the blank space, with the blank ending at the bottom-right corner.
 
-The generator automatically ensures all generated puzzles are unique:
-- Tracks all generated states using a hash-based system
-- Automatically retries if a duplicate state is generated
-- Supports up to thousands of unique tasks with random generation
+### Task Setup
 
-### State Space Scaling
+- **Puzzle Sizes**: 3×3, 4×4, or 5×5 grids (default mixed distribution: 30% 3×3, 40% 4×4, 30% 5×5)
+- **Numbered Tiles**: Sequential numbers filling all positions except one blank space
+- **Movement Rule**: Only tiles adjacent to blank space (up, down, left, right) can slide
+- **Move Constraints**: Specified number of moves (3-15 depending on puzzle size)
+- **Goal State**: Tiles arranged sequentially, blank at bottom-right
+- **Generation Methods**: Random valid states or reverse from goal state
+- **Color Themes**: 10 color themes (random selection or specified)
 
-With the new scaling design:
-- **3×3 puzzles, random method, 3-10 moves**: Can generate 100+ unique tasks
-- **4×4 puzzles, random method, 5-12 moves**: Can generate 500+ unique tasks
-- **5×5 puzzles, random method, 8-15 moves**: Can generate 1000+ unique tasks
+### Key Features
 
-### Output Structure
+- **Multi-step planning**: Requires planning sequence of moves to reach goal state
+- **Constraint satisfaction**: Must work within adjacency and move count constraints
+- **State space search**: Explores possible configurations to find solution path
+- **Optimal or near-optimal solutions**: Generated with specified move counts
+- **Variable difficulty**: Puzzle size and move count scale complexity
+- **Fixed camera**: Grid structure and view remain unchanged
+- **Color variety**: Multiple color themes for tiles enhance visual diversity
 
-Each generated task includes:
-- `first_frame.png`: The near-complete puzzle state (1-2 moves from solution)
-- `final_frame.png`: The complete solution state
-- `prompt.txt`: Instructions for the video model
-- `ground_truth.mp4`: Optional animation showing the solution (if video generation is enabled)
+---
 
-## Configuration
+## 📦 Data Format
 
-### Basic Configuration
-
-All configuration is done in `src/config.py`:
-
-```python
-class TaskConfig(GenerationConfig):
-    domain: str = "sliding_puzzle"
-    puzzle_size: int = 3          # 3, 4, or 5
-    min_moves: int = 3            # Minimum moves (3-20)
-    max_moves: int = 10           # Maximum moves (3-20)
-    generation_method: str = "random"  # "reverse" or "random"
-    image_size: tuple[int, int] = (400, 400)
-    generate_videos: bool = True
+```
+data/sliding_puzzle_task/
+├── sliding_puzzle_0000/
+│   ├── first_frame.png          # Initial state (scrambled tiles)
+│   ├── final_frame.png          # Final state (solved puzzle)
+│   ├── prompt.txt               # Task instructions with move count
+│   └── ground_truth.mp4         # Solution video (16 fps)
+├── sliding_puzzle_0001/
+│   └── ...
 ```
 
-### Mixed Difficulty Distribution
+**File specifications**: Images are 1024×1024 PNG. Videos are MP4 at 16 fps, duration varies by move count.
 
-For generating datasets with mixed configurations:
+---
 
-```python
-config = TaskConfig(
-    num_samples=1000,
-    difficulty_distribution={
-        'easy': {
-            'size': 3,
-            'min_moves': 3,
-            'max_moves': 5,
-            'weight': 0.3,
-            'generation_method': 'random'
-        },
-        'medium': {
-            'size': 4,
-            'min_moves': 5,
-            'max_moves': 8,
-            'weight': 0.4,
-            'generation_method': 'random'
-        },
-        'hard': {
-            'size': 5,
-            'min_moves': 8,
-            'max_moves': 12,
-            'weight': 0.3,
-            'generation_method': 'random'
-        }
-    }
-)
-```
+## 🏷️ Tags
 
-This will generate 1000 tasks with:
-- 300 easy tasks (3×3, 3-5 moves)
-- 400 medium tasks (4×4, 5-8 moves)
-- 300 hard tasks (5×5, 8-12 moves)
+`puzzle-solving` `sequential-planning` `spatial-reasoning` `constraint-satisfaction` `state-space-search` `multi-step-reasoning` `sliding-tiles`
 
-## License
-
-See LICENSE file for details.
-
-## Reference
-
-- [VMEvalKit](https://github.com/Video-Reason/VMEvalKit.git) - Video Model Evaluation Kit
-- [template-data-generator](https://github.com/vm-dataset/template-data-generator.git) - Data generator template
+---
