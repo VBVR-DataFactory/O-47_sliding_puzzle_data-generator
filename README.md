@@ -78,9 +78,9 @@ Do not make extra moves. Keep the camera view fixed and maintain the grid struct
 
 <table>
 <tr>
-  <td align="center"><img src="samples/O-47_first_0.png" width="300"/></td>
-  <td align="center"><img src="samples/O-47_video_0.gif" width="300"/></td>
-  <td align="center"><img src="samples/O-47_final_0.png" width="300"/></td>
+  <td align="center"><img src="samples/O-47_first_0.png" width="250"/></td>
+  <td align="center"><img src="samples/O-47_video_0.gif" width="400"/></td>
+  <td align="center"><img src="samples/O-47_final_0.png" width="250"/></td>
 </tr>
 <tr>
   <td align="center"><b>Initial Frame</b><br/>Tiles in scrambled configuration</td>
