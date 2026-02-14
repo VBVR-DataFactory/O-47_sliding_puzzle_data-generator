@@ -880,7 +880,7 @@ class TaskGenerator(BaseGenerator):
         print(f"   Moves range: {self.config.min_moves}-{self.config.max_moves}")
         
         for i in range(self.config.num_samples):
-            task_id = f"{self.config.domain}_{i:04d}"
+            task_id = f"{self.config.domain}_{i:08d}"
             
             pair = self.generate_task_pair(
                 task_id, 
@@ -964,7 +964,7 @@ class TaskGenerator(BaseGenerator):
             method = config.get("generation_method", self.config.generation_method)
             
             for i in range(count):
-                task_id = f"{self.config.domain}_{task_idx:04d}"
+                task_id = f"{self.config.domain}_{task_idx:08d}"
                 
                 pair = self.generate_task_pair(
                     task_id,
