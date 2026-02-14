@@ -69,9 +69,10 @@ Complete this sliding puzzle. The goal is to arrange the numbered tiles in seque
 
 Rules: Only tiles adjacent to the blank space can be moved. Slide one tile per move into the blank space.
 
-Complete in exactly 5 moves.
+Complete in exactly 3 moves.
 
 Do not make extra moves. Keep the camera view fixed and maintain the grid structure unchanged.
+
 ```
 
 ### Visual
