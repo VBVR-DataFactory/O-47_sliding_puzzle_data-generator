@@ -69,12 +69,10 @@ Complete this sliding puzzle. The goal is to arrange the numbered tiles in seque
 
 Rules: Only tiles adjacent to the blank space can be moved. Slide one tile per move into the blank space.
 
-Complete in exactly 3 moves.
+Complete in exactly 6 moves.
 
 Do not make extra moves. Keep the camera view fixed and maintain the grid structure unchanged.
-
 ```
-
 ### Visual
 
 <table>
@@ -123,15 +121,14 @@ Rearrange numbered tiles from a scrambled configuration into sequential order (1
 ## 📦 Data Format
 
 ```
-data/sliding_puzzle_task/
-├── sliding_puzzle_0000/
-│   ├── first_frame.png          # Initial state (scrambled tiles)
-│   ├── final_frame.png          # Final state (solved puzzle)
-│   ├── prompt.txt               # Task instructions with move count
-│   └── ground_truth.mp4         # Solution video (16 fps)
-├── sliding_puzzle_0001/
-│   └── ...
+data/questions/sliding_puzzle_task/sliding_puzzle_00000000/
+├── first_frame.png      # Initial state (scrambled tiles)
+├── final_frame.png      # Final state (solved puzzle)
+├── prompt.txt           # Task instructions with move count
+├── ground_truth.mp4     # Solution video (16 fps)
+└── question_metadata.json # Task metadata
 ```
+
 
 **File specifications**: Images are 1024×1024 PNG. Videos are MP4 at 16 fps, duration varies by move count.
 
