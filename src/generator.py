@@ -12,7 +12,7 @@ import tempfile
 import io
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
@@ -193,12 +193,19 @@ class TaskGenerator(BaseGenerator):
             tile_color = COLOR_THEMES['blue']
         
         # Try to generate a unique puzzle state
+        # Use deterministic seed based on task_id for reproducibility
+        task_hash = abs(hash(task_id))
+        if self.config.random_seed is not None:
+            base_seed = self.config.random_seed + task_hash * 1000
+        else:
+            base_seed = task_hash * 1000
+        
+        # Add size and color to seed to ensure different puzzles for different configs
+        base_seed += size * 100000 + abs(hash(tile_color_name)) % 10000
+        
         for attempt in range(max_retries):
-            task_hash = abs(hash(task_id))
-            if self.config.random_seed is not None:
-                seed = self.config.random_seed + task_hash * 1000 + attempt * 17
-            else:
-                seed = task_hash * 1000 + attempt * 17
+            # Only vary seed if we need to retry for uniqueness
+            seed = base_seed + attempt * 17
 
             # Pick an exact number of moves (this defines BOTH prompt and ground truth)
             num_moves = (seed % (max_m - min_m + 1)) + min_m
@@ -263,9 +270,27 @@ class TaskGenerator(BaseGenerator):
                 initial_state, goal_state, size, solution_length, states=states, tile_color=tile_color
             )
 
-        # Metadata is set to None to ensure only required files are generated:
-        # first_frame.png, final_frame.png, prompt.txt, and ground_truth.mp4
-        metadata = None
+        # Build task_data dict from parameters
+        task_data = {
+            "size": size,
+            "min_moves": min_m,
+            "max_moves": max_m,
+            "solution_length": solution_length,
+            "tile_color_theme": tile_color_name,
+            "generation_method": method,
+            "initial_state": initial_state,
+            "goal_state": goal_state,
+            "step_records": step_records
+        }
+        
+        # Build object-centric metadata
+        optimized_task_data = self._build_objects_metadata(
+            task_data, initial_state, goal_state, size
+        )
+
+        metadata = self._build_metadata(task_id, optimized_task_data)
+
+        
 
         return TaskPair(
             task_id=task_id,
@@ -517,7 +542,7 @@ class TaskGenerator(BaseGenerator):
     
     def render_puzzle(self, puzzle: List[List[int]], size: int, tile_color: str = '#4A90E2') -> Image.Image:
         """
-        Render the puzzle as a PIL Image.
+        Render the puzzle as a PIL Image using fast PIL rendering.
         
         Args:
             puzzle: 2D list representing puzzle state
@@ -529,61 +554,87 @@ class TaskGenerator(BaseGenerator):
         """
         canvas_size = self.config.image_size[0]
         
-        # Create figure with fixed layout
-        fig, ax = self._create_fixed_figure(size, tile_color)
+        # Convert hex color to RGB
+        if tile_color.startswith('#'):
+            tile_rgb = tuple(int(tile_color[i:i+2], 16) for i in (1, 3, 5))
+        else:
+            tile_rgb = (74, 144, 226)  # Default blue
         
-        # Draw grid lines (底层)
+        # Create image with white background
+        img = Image.new('RGB', (canvas_size, canvas_size), 'white')
+        draw = ImageDraw.Draw(img)
+        
+        # Calculate tile size and spacing
+        grid_padding = canvas_size * 0.02  # 2% padding - minimal for full screen
+        grid_size = canvas_size - 2 * grid_padding
+        cell_size = grid_size / size
+        tile_size = cell_size * 0.9  # 90% of cell to show grid lines
+        tile_margin = (cell_size - tile_size) / 2
+        
+        # Grid line width
+        grid_line_width = max(2, int(canvas_size / 512))
+        
+        # Draw grid lines
+        grid_color = (51, 51, 51)  # #333333
         for i in range(size + 1):
+            x = grid_padding + i * cell_size
+            y = grid_padding + i * cell_size
             # Vertical lines
-            ax.plot([i, i], [0, size], '-', linewidth=2, color='#333333', zorder=1)
+            draw.line([(x, grid_padding), (x, grid_padding + grid_size)], 
+                     fill=grid_color, width=grid_line_width)
             # Horizontal lines
-            ax.plot([0, size], [i, i], '-', linewidth=2, color='#333333', zorder=1)
+            draw.line([(grid_padding, y), (grid_padding + grid_size, y)], 
+                     fill=grid_color, width=grid_line_width)
         
-        # Calculate tile size
-        tile_size = 0.9  # Slightly smaller than 1 to show grid lines
-        margin = (1 - tile_size) / 2
-        
-        # Adjust font size based on puzzle size
+        # Font size based on puzzle size
         if size == 3:
-            fontsize = 32
+            font_size = int(canvas_size / 20)  # Larger font for 3x3
         elif size == 4:
-            fontsize = 24
+            font_size = int(canvas_size / 25)  # Larger font for 4x4
         else:  # size == 5
-            fontsize = 20
+            font_size = int(canvas_size / 30)  # Larger font for 5x5
         
-        # Draw tiles (上层，遮挡网格线)
+        # Try to load a font, fallback to default
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+        except:
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except:
+                font = ImageFont.load_default()
+        
+        # Draw tiles
         for i in range(size):
             for j in range(size):
                 value = puzzle[i][j]
-                x = j + margin
-                y = size - 1 - i + margin  # Flip Y axis
                 
                 if value == 0:
-                    # Empty space - white background (no tile, just grid lines)
-                    pass
-                else:
-                    # Numbered tile - draw as colored rectangle with dynamic color
-                    rect = patches.Rectangle(
-                        (x, y), tile_size, tile_size,
-                        linewidth=2, edgecolor='#333333', facecolor=tile_color,
-                        zorder=3  # 方块在网格线上层
-                    )
-                    ax.add_patch(rect)
-                    # Add number
-                    ax.text(x + tile_size/2, y + tile_size/2, str(value),
-                           ha='center', va='center', fontsize=fontsize, 
-                           color='white', weight='bold', zorder=4)
-        
-        # Use canvas.draw() for faster rendering with fixed layout
-        fig.canvas.draw()
-        img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-        img = Image.fromarray(img_array, 'RGB')
-        plt.close(fig)
-        
-        # Resize to desired canvas size
-        if img.size[0] != canvas_size:
-            img = img.resize((canvas_size, canvas_size), Image.Resampling.LANCZOS)
+                    # Empty space - skip (white background already set)
+                    continue
+                
+                # Calculate tile position
+                x = grid_padding + j * cell_size + tile_margin
+                y = grid_padding + i * cell_size + tile_margin  # i=0 is top, i=size-1 is bottom
+                
+                # Draw tile rectangle
+                draw.rectangle(
+                    [x, y, x + tile_size, y + tile_size],
+                    fill=tile_rgb,
+                    outline=grid_color,
+                    width=grid_line_width
+                )
+                
+                # Draw number text
+                text = str(value)
+                # Get text bounding box for centering
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                text_x = x + (tile_size - text_width) / 2
+                text_y = y + (tile_size - text_height) / 2
+                
+                draw.text((text_x, text_y), text, fill='white', font=font)
         
         return img
     
@@ -629,7 +680,7 @@ class TaskGenerator(BaseGenerator):
         puzzle_size: int,
         states: Optional[List[List[List[int]]]] = None,
         hold_frames: int = 5,
-        transition_frames_per_step: int = 10,
+        transition_frames_per_step: int = 6,  # Reduced from 10 for faster generation
         tile_color: str = '#4A90E2'
     ) -> List[Image.Image]:
         """
@@ -653,15 +704,13 @@ class TaskGenerator(BaseGenerator):
             state_before = states[idx]
             state_after = states[idx + 1]
             
-            # Find blank position in both states
-            blank_before = None
-            blank_after = None
-            for i in range(puzzle_size):
-                for j in range(puzzle_size):
-                    if state_before[i][j] == 0:
-                        blank_before = (i, j)
-                    if state_after[i][j] == 0:
-                        blank_after = (i, j)
+            # Find blank position (optimized: track position instead of searching)
+            if idx == 0:
+                blank_before = self.find_blank(state_before)
+            else:
+                # blank_before is the blank_after from previous iteration
+                blank_before = blank_after
+            blank_after = self.find_blank(state_after)
             
             # The tile that moved:
             # In state_before, blank is at blank_before
@@ -702,161 +751,121 @@ class TaskGenerator(BaseGenerator):
     ) -> List[Image.Image]:
         """
         Create frames showing a single tile sliding from one position to another.
+        Uses fast PIL rendering instead of matplotlib.
         """
         frames = []
         canvas_size = self.config.image_size[0]
         
+        # Convert hex color to RGB
+        if tile_color.startswith('#'):
+            tile_rgb = tuple(int(tile_color[i:i+2], 16) for i in (1, 3, 5))
+        else:
+            tile_rgb = (74, 144, 226)  # Default blue
+        
+        # Calculate positions
+        grid_padding = canvas_size * 0.02  # 2% padding - minimal for full screen
+        grid_size = canvas_size - 2 * grid_padding
+        cell_size = grid_size / puzzle_size
+        tile_size = cell_size * 0.9
+        tile_margin = (cell_size - tile_size) / 2
+        
+        grid_line_width = max(2, int(canvas_size / 512))
+        grid_color = (51, 51, 51)
+        
+        # Font size
+        if puzzle_size == 3:
+            font_size = int(canvas_size / 20)  # Larger font for 3x3
+        elif puzzle_size == 4:
+            font_size = int(canvas_size / 25)  # Larger font for 4x4
+        else:
+            font_size = int(canvas_size / 30)  # Larger font for 5x5
+        
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+        except:
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except:
+                font = ImageFont.load_default()
+        
+        # Pre-render static background (grid + static tiles)
+        base_img = Image.new('RGB', (canvas_size, canvas_size), 'white')
+        base_draw = ImageDraw.Draw(base_img)
+        
+        # Draw grid lines
+        for i in range(puzzle_size + 1):
+            x = grid_padding + i * cell_size
+            y = grid_padding + i * cell_size
+            base_draw.line([(x, grid_padding), (x, grid_padding + grid_size)], 
+                          fill=grid_color, width=grid_line_width)
+            base_draw.line([(grid_padding, y), (grid_padding + grid_size, y)], 
+                          fill=grid_color, width=grid_line_width)
+        
+        # Draw static tiles (excluding moving tile and blank)
+        for i in range(puzzle_size):
+            for j in range(puzzle_size):
+                value = state[i][j]
+                if value == 0 or value == tile_value:
+                    continue
+                
+                x = grid_padding + j * cell_size + tile_margin
+                y = grid_padding + i * cell_size + tile_margin  # i=0 is top, i=size-1 is bottom
+                
+                base_draw.rectangle(
+                    [x, y, x + tile_size, y + tile_size],
+                    fill=tile_rgb,
+                    outline=grid_color,
+                    width=grid_line_width
+                )
+                
+                text = str(value)
+                bbox = base_draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                text_x = x + (tile_size - text_width) / 2
+                text_y = y + (tile_size - text_height) / 2
+                base_draw.text((text_x, text_y), text, fill='white', font=font)
+        
+        # Generate animation frames
         for frame_idx in range(num_frames):
             # Calculate interpolation progress (0.0 to 1.0)
             t = frame_idx / (num_frames - 1) if num_frames > 1 else 1.0
             # Use smooth easing
             t = t * t * (3.0 - 2.0 * t)  # smoothstep
             
-            # Create the frame using fixed layout (fast rendering)
-            fig, ax = self._create_fixed_figure(puzzle_size, tile_color)
+            # Create frame from base image
+            frame = base_img.copy()
+            frame_draw = ImageDraw.Draw(frame)
             
-            # Draw grid lines (底层)
-            for i in range(puzzle_size + 1):
-                ax.plot([i, i], [0, puzzle_size], '-', linewidth=2, color='#333333', zorder=1)
-                ax.plot([0, puzzle_size], [i, i], '-', linewidth=2, color='#333333', zorder=1)
-            
-            # Calculate tile size and margin
-            tile_size = 0.9
-            margin = (1 - tile_size) / 2
-            
-            # Font size based on puzzle size
-            if puzzle_size == 3:
-                fontsize = 32
-            elif puzzle_size == 4:
-                fontsize = 24
-            else:
-                fontsize = 20
-            
-            # Draw all tiles except the moving one (上层，遮挡网格线)
-            for i in range(puzzle_size):
-                for j in range(puzzle_size):
-                    value = state[i][j]
-                    if value == 0 or value == tile_value:
-                        continue
-                    
-                    x = j + margin
-                    y = puzzle_size - 1 - i + margin
-                    
-                    rect = patches.Rectangle(
-                        (x, y), tile_size, tile_size,
-                        linewidth=2, edgecolor='#333333', facecolor=tile_color,
-                        zorder=3  # 确保方块在网格线上层
-                    )
-                    ax.add_patch(rect)
-                    ax.text(x + tile_size/2, y + tile_size/2, str(value),
-                           ha='center', va='center', fontsize=fontsize,
-                           color='white', weight='bold', zorder=4)
-            
-            # Draw the moving tile at interpolated position (最上层)
-            from_x = from_col + margin
-            from_y = puzzle_size - 1 - from_row + margin
-            to_x = to_col + margin
-            to_y = puzzle_size - 1 - to_row + margin
+            # Calculate moving tile position
+            from_x = grid_padding + from_col * cell_size + tile_margin
+            from_y = grid_padding + from_row * cell_size + tile_margin
+            to_x = grid_padding + to_col * cell_size + tile_margin
+            to_y = grid_padding + to_row * cell_size + tile_margin
             
             current_x = from_x + (to_x - from_x) * t
             current_y = from_y + (to_y - from_y) * t
             
-            rect = patches.Rectangle(
-                (current_x, current_y), tile_size, tile_size,
-                linewidth=2, edgecolor='#333333', facecolor=tile_color,
-                zorder=5  # 移动的方块在最上层
+            # Draw moving tile
+            frame_draw.rectangle(
+                [current_x, current_y, current_x + tile_size, current_y + tile_size],
+                fill=tile_rgb,
+                outline=grid_color,
+                width=grid_line_width
             )
-            ax.add_patch(rect)
-            ax.text(current_x + tile_size/2, current_y + tile_size/2, str(tile_value),
-                   ha='center', va='center', fontsize=fontsize,
-                   color='white', weight='bold', zorder=6)
             
-            # Convert to PIL Image using canvas.draw() with fixed layout
-            # This is much faster than savefig and maintains consistency
-            fig.canvas.draw()
-            img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            img = Image.fromarray(img_array, 'RGB')
-            plt.close(fig)
+            text = str(tile_value)
+            bbox = frame_draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            text_x = current_x + (tile_size - text_width) / 2
+            text_y = current_y + (tile_size - text_height) / 2
+            frame_draw.text((text_x, text_y), text, fill='white', font=font)
             
-            # Resize to desired canvas size
-            if img.size[0] != canvas_size:
-                img = img.resize((canvas_size, canvas_size), Image.Resampling.LANCZOS)
-            
-            frames.append(img)
+            frames.append(frame)
         
         return frames
-    
-    def _create_sliding_animation_frames(
-        self,
-        initial_state: List[List[int]],
-        goal_state: List[List[int]],
-        puzzle_size: int,
-        solution_length: int,
-        hold_frames: int = 5,
-        transition_frames: int = 25
-    ) -> List[Image.Image]:
-        """
-        Create animation frames showing tiles sliding from initial to goal state.
-        
-        This creates a smooth animation where tiles slide into their final positions.
-        """
-        frames = []
-        
-        # Hold initial position
-        initial_img = self.render_puzzle(initial_state, puzzle_size)
-        for _ in range(hold_frames):
-            frames.append(initial_img.copy())
-        
-        # Find which tile needs to move
-        # Compare initial and goal states to find the moving tile
-        moving_tile_value = None
-        from_pos = None
-        to_pos = None
-        
-        for i in range(puzzle_size):
-            for j in range(puzzle_size):
-                if initial_state[i][j] != goal_state[i][j]:
-                    if initial_state[i][j] != 0:
-                        moving_tile_value = initial_state[i][j]
-                        from_pos = (i, j)
-                    if goal_state[i][j] != 0:
-                        # Find where this tile should be
-                        for ii in range(puzzle_size):
-                            for jj in range(puzzle_size):
-                                if initial_state[ii][jj] == goal_state[i][j]:
-                                    to_pos = (i, j)
-                                    break
-        
-        # If we can't determine the move, use simple crossfade
-        if moving_tile_value is None or from_pos is None or to_pos is None:
-            goal_img = self.render_puzzle(goal_state, puzzle_size)
-            for _ in range(transition_frames):
-                frames.append(initial_img.copy())
-            for _ in range(hold_frames):
-                frames.append(goal_img.copy())
-            return frames
-        
-        # Create transition frames with sliding animation
-        # For simplicity, we'll use a crossfade between states
-        # A more sophisticated implementation would animate individual tiles
-        goal_img = self.render_puzzle(goal_state, puzzle_size)
-        
-        initial_rgba = initial_img.convert('RGBA')
-        goal_rgba = goal_img.convert('RGBA')
-        
-        for i in range(transition_frames):
-            progress = i / (transition_frames - 1) if transition_frames > 1 else 1.0
-            blended = Image.blend(initial_rgba, goal_rgba, progress)
-            frames.append(blended.convert('RGB'))
-        
-        # Hold final position
-        for _ in range(hold_frames):
-            frames.append(goal_img.copy())
-        
-        return frames
-    
-    # ══════════════════════════════════════════════════════════════════════════
+        # ══════════════════════════════════════════════════════════════════════════
     #  DATASET GENERATION WITH UNIQUENESS
     # ══════════════════════════════════════════════════════════════════════════
     
@@ -866,6 +875,9 @@ class TaskGenerator(BaseGenerator):
         
         Supports both single configuration and mixed difficulty distributions.
         """
+        # Reset seen_states for deterministic generation
+        self.seen_states = set()
+        
         pairs = []
         max_retries_per_task = 200
         
@@ -874,11 +886,6 @@ class TaskGenerator(BaseGenerator):
             return self._generate_dataset_with_distribution()
         
         # Single configuration generation
-        print(f"🧩 Generating {self.config.num_samples} unique sliding puzzle tasks...")
-        print(f"   Puzzle size: {self.config.puzzle_size}×{self.config.puzzle_size}")
-        print(f"   Generation method: {self.config.generation_method}")
-        print(f"   Moves range: {self.config.min_moves}-{self.config.max_moves}")
-        
         for i in range(self.config.num_samples):
             task_id = f"{self.config.domain}_{i:08d}"
             
@@ -893,8 +900,7 @@ class TaskGenerator(BaseGenerator):
             
             if pair is not None:
                 pairs.append(pair)
-                if (i + 1) % 10 == 0 or i == 0:
-                    print(f"  ✅ Generated: {task_id} ({len(pairs)}/{self.config.num_samples})")
+                print(f"  Generated: {task_id}")
             else:
                 # Try a few more times with different seeds
                 for retry in range(5):
@@ -910,13 +916,6 @@ class TaskGenerator(BaseGenerator):
                         pairs.append(pair)
                         break
         
-        print(f"✅ Generated {len(pairs)} unique sliding puzzle tasks")
-        print(f"   Unique states: {len(self.seen_states)}")
-        
-        if len(pairs) < self.config.num_samples:
-            print(f"   ⚠️  Warning: Only generated {len(pairs)}/{self.config.num_samples} tasks")
-            print(f"      Consider increasing max_moves or using 'random' generation method for larger state space.")
-        
         return pairs
     
     def _generate_dataset_with_distribution(self) -> List[TaskPair]:
@@ -924,14 +923,16 @@ class TaskGenerator(BaseGenerator):
         Generate dataset with mixed difficulty distribution.
         
         Supports different puzzle sizes and move ranges in a single dataset.
+        Tasks are generated in random order, not sequentially by difficulty.
         """
+        # Reset seen_states for deterministic generation
+        self.seen_states = set()
+        
         pairs = []
         max_retries_per_task = 200
         
         dist = self.config.difficulty_distribution
         total_weight = sum(d.get("weight", 1.0) for d in dist.values())
-        
-        print(f"🧩 Generating {self.config.num_samples} unique sliding puzzle tasks...")
         
         # Calculate samples per difficulty
         difficulty_samples = {}
@@ -952,8 +953,8 @@ class TaskGenerator(BaseGenerator):
             for i in range(remaining):
                 difficulty_samples[difficulties[i % len(difficulties)]]["count"] += 1
         
-        # Generate tasks for each difficulty
-        task_idx = 0
+        # Create a shuffled list of task specifications (mixed order)
+        task_specs = []
         for difficulty, info in difficulty_samples.items():
             count = info["count"]
             config = info["config"]
@@ -963,38 +964,140 @@ class TaskGenerator(BaseGenerator):
             max_moves = config["max_moves"]
             method = config.get("generation_method", self.config.generation_method)
             
-            for i in range(count):
-                task_id = f"{self.config.domain}_{task_idx:08d}"
-                
-                pair = self.generate_task_pair(
-                    task_id,
-                    max_retries=max_retries_per_task,
-                    puzzle_size=size,
-                    min_moves=min_moves,
-                    max_moves=max_moves,
-                    generation_method=method
-                )
-                
-                if pair is not None:
-                    pairs.append(pair)
-                    print(f"  Generated: {task_id}")
-                    task_idx += 1
-                else:
-                    # Retry with different approach
-                    for retry in range(5):
-                        pair = self.generate_task_pair(
-                            task_id,
-                            max_retries=50,
-                            puzzle_size=size,
-                            min_moves=min_moves,
-                            max_moves=max_moves,
-                            generation_method=method
-                        )
-                        if pair is not None:
-                            pairs.append(pair)
-                            task_idx += 1
-                            break
+            # Add count tasks of this difficulty
+            for _ in range(count):
+                task_specs.append({
+                    "size": size,
+                    "min_moves": min_moves,
+                    "max_moves": max_moves,
+                    "generation_method": method,
+                    "difficulty": difficulty
+                })
         
-        print(f"  ✓ Generated {len(pairs)}/{self.config.num_samples} tasks")
+        # Shuffle the task specs to mix different sizes
+        self.rng.shuffle(task_specs)
+        
+        # Generate tasks in shuffled order
+        task_idx = 0
+        for spec in task_specs:
+            task_id = f"{self.config.domain}_{task_idx:08d}"
+            
+            pair = self.generate_task_pair(
+                task_id,
+                max_retries=max_retries_per_task,
+                puzzle_size=spec["size"],
+                min_moves=spec["min_moves"],
+                max_moves=spec["max_moves"],
+                generation_method=spec["generation_method"]
+            )
+            
+            if pair is not None:
+                pairs.append(pair)
+                print(f"  Generated: {task_id}")
+                task_idx += 1
+            else:
+                # Retry with different approach
+                for retry in range(5):
+                    pair = self.generate_task_pair(
+                        task_id,
+                        max_retries=50,
+                        puzzle_size=spec["size"],
+                        min_moves=spec["min_moves"],
+                        max_moves=spec["max_moves"],
+                        generation_method=spec["generation_method"]
+                    )
+                    if pair is not None:
+                        pairs.append(pair)
+                        print(f"  Generated: {task_id}")
+                        task_idx += 1
+                        break
         
         return pairs
+
+    def _build_objects_metadata(
+        self,
+        task_data: dict,
+        initial_state: List[List[int]],
+        goal_state: List[List[int]],
+        size: int
+    ) -> Dict[str, Any]:
+        """
+        Build object-centric metadata for sliding puzzle task.
+        
+        Args:
+            task_data: Task data dictionary containing task parameters
+            initial_state: Initial puzzle state (2D list)
+            goal_state: Goal puzzle state (2D list)
+            size: Puzzle size
+            
+        Returns:
+            Dictionary with object-centric metadata
+        """
+        objects = []
+        
+        # Find positions for each tile value
+        for value in range(1, size * size):  # 1 to (size*size - 1), excluding 0 (blank)
+            # Find initial position
+            initial_pos = None
+            for i in range(size):
+                for j in range(size):
+                    if initial_state[i][j] == value:
+                        initial_pos = [i, j]
+                        break
+                if initial_pos is not None:
+                    break
+            
+            # Find target position
+            target_pos = None
+            for i in range(size):
+                for j in range(size):
+                    if goal_state[i][j] == value:
+                        target_pos = [i, j]
+                        break
+                if target_pos is not None:
+                    break
+            
+            if initial_pos is not None and target_pos is not None:
+                objects.append({
+                    "symbol": f"tile_{value}",
+                    "value": value,
+                    "initial_position": initial_pos,
+                    "target_position": target_pos,
+                    "color": task_data["tile_color_theme"]
+                })
+        
+        # Add blank space object
+        blank_initial = None
+        blank_target = None
+        for i in range(size):
+            for j in range(size):
+                if initial_state[i][j] == 0:
+                    blank_initial = [i, j]
+                if goal_state[i][j] == 0:
+                    blank_target = [i, j]
+                if blank_initial is not None and blank_target is not None:
+                    break
+            if blank_initial is not None and blank_target is not None:
+                break
+        
+        if blank_initial is not None and blank_target is not None:
+            objects.append({
+                "symbol": "blank",
+                "value": 0,
+                "initial_position": blank_initial,
+                "target_position": blank_target,
+                "color": None
+            })
+        
+        # Build task-specific metadata
+        optimized_task_data = {
+            "size": task_data["size"],
+            "min_moves": task_data["min_moves"],
+            "max_moves": task_data["max_moves"],
+            "solution_length": task_data["solution_length"],
+            "tile_color_theme": task_data["tile_color_theme"],
+            "generation_method": task_data["generation_method"],
+            "objects": objects
+        }
+        
+        return optimized_task_data
