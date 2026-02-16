@@ -6,7 +6,7 @@ Follows the template-data-generator output format:
 - final_frame.png: Goal state (REQUIRED)
 - prompt.txt: Task instructions (REQUIRED)
 - ground_truth.mp4: Solution video (OPTIONAL)
-- question_metadata.json: Task metadata (OPTIONAL)
+- metadata.json: Task metadata (OPTIONAL)
 """
 
 import json
@@ -40,7 +40,7 @@ class OutputWriter:
 
         # Write metadata if provided (VMEvalKit-compatible name)
         if task_pair.metadata is not None:
-            (task_dir / "question_metadata.json").write_text(
+            (task_dir / "metadata.json").write_text(
                 json.dumps(task_pair.metadata, ensure_ascii=False, indent=2)
             )
         
