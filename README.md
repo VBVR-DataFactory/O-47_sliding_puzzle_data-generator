@@ -12,7 +12,7 @@ Each sample pairs a **task** (first frame + prompt describing what needs to happ
 |----------|-------|
 | **Task ID** | O-47 |
 | **Task** | Sliding Puzzle |
-| **Category** | Puzzle Solving/Sequential Planning |
+| **Category** | Abstraction |
 | **Resolution** | 1024×1024 px |
 | **FPS** | 16 fps |
 | **Duration** | varies |
