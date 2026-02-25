@@ -595,14 +595,27 @@ class TaskGenerator(BaseGenerator):
             font_size = int(canvas_size / 30)  # Larger font for 5x5
         
         # Try to load a font, fallback to default
-        try:
-            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-        except:
+        _font_candidates = [
+            "/opt/fonts/DejaVuSans-Bold.ttf",
+            "/opt/fonts/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/Library/Fonts/Arial.ttf",
+            "arial.ttf",
+        ]
+        font = None
+        for _fp in _font_candidates:
             try:
-                font = ImageFont.truetype("arial.ttf", font_size)
-            except:
-                font = ImageFont.load_default()
-        
+                font = ImageFont.truetype(_fp, font_size)
+                break
+            except (OSError, IOError):
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+
         # Draw tiles
         for i in range(size):
             for j in range(size):
@@ -780,14 +793,27 @@ class TaskGenerator(BaseGenerator):
         else:
             font_size = int(canvas_size / 30)  # Larger font for 5x5
         
-        try:
-            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
-        except:
+        _font_candidates = [
+            "/opt/fonts/DejaVuSans-Bold.ttf",
+            "/opt/fonts/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/Library/Fonts/Arial.ttf",
+            "arial.ttf",
+        ]
+        font = None
+        for _fp in _font_candidates:
             try:
-                font = ImageFont.truetype("arial.ttf", font_size)
-            except:
-                font = ImageFont.load_default()
-        
+                font = ImageFont.truetype(_fp, font_size)
+                break
+            except (OSError, IOError):
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+
         # Pre-render static background (grid + static tiles)
         base_img = Image.new('RGB', (canvas_size, canvas_size), 'white')
         base_draw = ImageDraw.Draw(base_img)
